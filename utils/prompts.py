@@ -1,3 +1,5 @@
+# Prompts for the OpenAI API
+
 generation_prompt = '''
 Generate a detailed and concise description of the following file content: text(s), image(s), PDF(s), CSV(s), Excel(s).
 The description should capture the essence of the content to assist in later ranking the relevance of the documents against a query string using cosine similarity.
