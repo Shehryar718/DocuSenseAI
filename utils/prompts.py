@@ -13,6 +13,9 @@ Avoid responses indicating inability to describe the content. Always provide a m
 
 retrieval_prompt = """
 Using the content from the provided document(s), please deliver the most accurate answer to my question.
-If a document is relevant, include its path at the end in the format: 'Path: [path]'. 
+If the user asks something from a document, answer that.
+If the user asks for a retrieval of a document, you just retrieve the document.
+If a document is relevant, include its path at the end in the format: 'Path: [path]'.
+You do not write things like this: 'you can find the document here:'. Just answer the question (if applicable) and then the path. 
 If no document is relevant, say that there is no relevant document and OMIT the path.
 """

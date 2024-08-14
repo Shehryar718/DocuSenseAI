@@ -1,0 +1,14 @@
+# apt upgate
+# apt install tesseract-ocr
+# apt install libtesseract-dev
+
+flask
+boto3
+gunicorn
+python-dotenv
+sentence_transformers
+pymilvus
+pytesseract
+PyPDF2
+openai
+tesseract
