@@ -7,6 +7,8 @@ from PIL import Image
 from io import BytesIO
 from typing import Tuple, Dict
 
+MAX_CONTENT_CHARS = 8000
+
 def get_pdf_data(pdf_path: str) -> str:
     """
     Retrieves the content of a PDF file.
@@ -70,7 +72,9 @@ def get_excel_data(excel_path: str) -> str:
     except ValueError as e:
         raise ValueError(f"Error reading Excel file: {str(e)}")
     
-    text = df.head().to_string()
+    text = df.to_string()
+    if len(text) > MAX_CONTENT_CHARS:
+        text = text[:MAX_CONTENT_CHARS] + f"\n... [truncated, showing ~{MAX_CONTENT_CHARS} chars of {len(df)} rows]"
     data = f"Excel file name: {os.path.basename(excel_path).replace('.xlsx', '')}\nContent: {text}"
     return data
 
@@ -103,7 +107,9 @@ def get_csv_data(csv_path: str) -> str:
     except pd.errors.ParserError as e:
         raise pd.errors.ParserError(f"Error reading CSV file: {str(e)}")
     
-    text = df.head().to_string()
+    text = df.to_string()
+    if len(text) > MAX_CONTENT_CHARS:
+        text = text[:MAX_CONTENT_CHARS] + f"\n... [truncated, showing ~{MAX_CONTENT_CHARS} chars of {len(df)} rows]"
     data = f"CSV file name: {os.path.basename(csv_path).replace('.csv', '')}\nContent: {text}"
     return data
 
@@ -172,7 +178,7 @@ def get_image_data(image_path: str) -> Tuple[str, Dict[str, Dict[str, str]]]:
     if image.mode == 'RGBA':
         image = image.convert('RGB')
 
-    image = image.resize((512, 512))
+    image.thumbnail((512, 512))
 
     # Extract text from the image using OCR
     extracted_text = pytesseract.image_to_string(image)

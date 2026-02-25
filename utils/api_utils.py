@@ -84,7 +84,7 @@ def generate_description(file_path: str, user_message: str = '') -> Tuple[str, s
     
     return response, file_content
 
-def run_api(messages: List[Dict[str, str]]) -> str:
+def run_api(messages: List[Dict[str, str]], max_tokens: int = 1500) -> str:
     """
     Sends a series of messages to the GPT-4o-mini model via the OpenAI API and retrieves the generated response.
 
@@ -94,6 +94,8 @@ def run_api(messages: List[Dict[str, str]]) -> str:
         A list of dictionaries representing the conversation history. Each dictionary should have the following keys:
         - 'role': Specifies the role in the conversation ('system', 'user', or 'assistant').
         - 'content': The content of the message.
+    max_tokens : int, optional
+        Maximum number of tokens in the response. Default is 1500.
 
     Returns:
     --------
@@ -113,9 +115,8 @@ def run_api(messages: List[Dict[str, str]]) -> str:
         response = client.chat.completions.create(
             model='gpt-4o-mini',
             messages=messages,
-            max_tokens=500,
+            max_tokens=max_tokens,
         )
         return response.choices[0].message.content
     except Exception as e:
-        # Handle or log the error as needed
         raise RuntimeError(f"API request failed: {str(e)}")
