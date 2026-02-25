@@ -135,7 +135,7 @@ def get_txt_data(txt_path: str) -> str:
     if not os.path.exists(txt_path):
         raise FileNotFoundError(f"The file {txt_path} does not exist.")
     
-    with open(txt_path, 'r') as file:
+    with open(txt_path, 'r', encoding='utf-8') as file:
         text = file.read()
 
     data = f"Text file name: {os.path.basename(txt_path).replace('.txt', '')}\nContent: {text}"

@@ -77,7 +77,7 @@ class DocuSenseAI:
         idx = uuid.uuid4().int % (2**63)
 
         metadata = {
-            "type": path.split('.')[-1],
+            "type": os.path.splitext(path)[1].lstrip('.').lower(),
             "description": description,
             "content": text,
             "path": path

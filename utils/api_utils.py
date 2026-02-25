@@ -68,25 +68,28 @@ def generate_description(file_path: str, user_message: str = '') -> Tuple[str, s
     chat_history = [{"role": "system", "content": generation_prompt}]
     file_content = ""
 
-    if file_path.endswith('.pdf'):
+    ext = os.path.splitext(file_path)[1].lower()
+
+    if ext == '.pdf':
         file_content = get_pdf_data(file_path)
         chat_history.append({"role": "user", "content": file_content})
-    elif file_path.endswith('.txt'):
+    elif ext == '.txt':
         file_content = get_txt_data(file_path)
         chat_history.append({"role": "user", "content": file_content})
-    elif file_path.endswith('.csv'):
+    elif ext == '.csv':
         file_content = get_csv_data(file_path)
         chat_history.append({"role": "user", "content": file_content})
-    elif file_path.endswith('.xlsx'):
+    elif ext == '.xlsx':
         file_content = get_excel_data(file_path)
         chat_history.append({"role": "user", "content": file_content})
-    elif file_path.lower().endswith(('.png', '.jpg', '.jpeg', '.gif')):
+    elif ext in ('.png', '.jpg', '.jpeg', '.gif'):
         extracted_text, image_data = get_image_data(file_path)
         file_content = extracted_text
         text_data = {"type": "text", "text": extracted_text}
         chat_history.append({"role": "user", "content": [image_data, text_data]})
     else:
-        raise ValueError(f"Unsupported file format: {file_path.split('.')[-1]}")
+        raise ValueError(f"Unsupported file format: '{ext or 'none'}'")
+
 
     if user_message:
         chat_history.append({"role": "user", "content": user_message})
