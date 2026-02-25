@@ -44,7 +44,10 @@ class DocuSenseAI:
         os.makedirs(os.path.dirname(vectorstore_path) or ".", exist_ok=True)
         self.dimension = dimension
         self.model = SentenceTransformer(embedding_model)
-        self.vdb_client = MilvusClient(vectorstore_path)
+        try:
+            self.vdb_client = MilvusClient(vectorstore_path)
+        except Exception as e:
+            raise ConnectionError(f"Failed to connect to Milvus at '{vectorstore_path}': {e}")
 
     def _get_text_embedding(self, text: str) -> List[float]:
         """Generates an embedding vector from the input text."""
@@ -52,11 +55,14 @@ class DocuSenseAI:
 
     def create_collection(self, collection_name: str) -> None:
         """Creates a collection in Milvus if it does not already exist."""
-        if not self.vdb_client.has_collection(collection_name=collection_name):
-            self.vdb_client.create_collection(
-                collection_name=collection_name,
-                dimension=self.dimension
-            )
+        try:
+            if not self.vdb_client.has_collection(collection_name=collection_name):
+                self.vdb_client.create_collection(
+                    collection_name=collection_name,
+                    dimension=self.dimension
+                )
+        except Exception as e:
+            raise RuntimeError(f"Failed to create collection '{collection_name}': {e}")
 
     def add_document(self, collection_name: str, path: str) -> None:
         """
@@ -89,16 +95,22 @@ class DocuSenseAI:
             "metadata": metadata
         }]
 
-        self.vdb_client.insert(
-            collection_name=collection_name,
-            data=data,
-            timeout=120
-        )
+        try:
+            self.vdb_client.insert(
+                collection_name=collection_name,
+                data=data,
+                timeout=120
+            )
+        except Exception as e:
+            raise RuntimeError(f"Failed to insert document '{path}' into '{collection_name}': {e}")
 
     def delete_collection(self, collection_name: str) -> None:
         """Deletes a collection from Milvus."""
-        if self.vdb_client.has_collection(collection_name=collection_name):
-            self.vdb_client.drop_collection(collection_name=collection_name)
+        try:
+            if self.vdb_client.has_collection(collection_name=collection_name):
+                self.vdb_client.drop_collection(collection_name=collection_name)
+        except Exception as e:
+            raise RuntimeError(f"Failed to delete collection '{collection_name}': {e}")
 
     def retrieve_document(
         self,
@@ -128,12 +140,15 @@ class DocuSenseAI:
 
         vector = self._get_text_embedding(text)
 
-        results = self.vdb_client.search(
-            collection_name=collection_name,
-            data=[vector],
-            output_fields=["metadata"],
-            limit=top_k
-        )
+        try:
+            results = self.vdb_client.search(
+                collection_name=collection_name,
+                data=[vector],
+                output_fields=["metadata"],
+                limit=top_k
+            )
+        except Exception as e:
+            raise RuntimeError(f"Failed to search collection '{collection_name}': {e}")
 
         return results[0] if results else []
 

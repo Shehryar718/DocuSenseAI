@@ -1,6 +1,9 @@
 **/__pycache__/
 **/.DS_Store
 .cache
+*.pyc
+*.pyo
+*.pyd
 
 # Jupyter Notebook
 **/.ipynb_checkpoints
@@ -13,6 +16,13 @@ venv/
 ENV/
 env.bak/
 venv.bak/
+
+# Tool caches
+.pytest_cache/
+.mypy_cache/
+
+# Logs
+*.log
 
 docs/
 instance/
