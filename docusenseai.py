@@ -1,247 +1,196 @@
 import os
 import uuid
+import logging
 from pymilvus import MilvusClient
 from sentence_transformers import SentenceTransformer
 from utils.api_utils import run_api, generate_description
 from utils.prompts import retrieval_prompt
 from typing import List, Dict, Union
 
-# Directory and file setup
-os.makedirs("instance", exist_ok=True)
-VECTORSTORE = "instance/VECTORSTORE"
-EMBEDDINGS_MODEL_NAME = "all-MiniLM-L6-v2"
-DIMENSION = 384
+logger = logging.getLogger(__name__)
 
-# Initialize model and database client
-model = SentenceTransformer(EMBEDDINGS_MODEL_NAME)
-vdb_client = MilvusClient(VECTORSTORE)
+DEFAULT_VECTORSTORE = "instance/VECTORSTORE"
+DEFAULT_EMBEDDING_MODEL = "all-MiniLM-L6-v2"
+DEFAULT_DIMENSION = 384
 
-def get_text_embedding(text: str, model: SentenceTransformer) -> List[float]:
+
+class DocuSenseAI:
     """
-    Generates an embedding vector from the input text using the provided model.
+    AI-powered document query and retrieval system.
 
     Parameters:
     -----------
-    text : str
-        The input text to be encoded into an embedding vector.
-    model : SentenceTransformer
-        The model used to generate the embedding. It should have an `encode` method
-        that takes a string input and returns an embedding vector.
-
-    Returns:
-    --------
-    List[float]
-        The embedding vector as a list of floats.
+    vectorstore_path : str, optional
+        Path to the Milvus vector store. Default is "instance/VECTORSTORE".
+    embedding_model : str, optional
+        Name of the SentenceTransformer model. Default is "all-MiniLM-L6-v2".
+    dimension : int, optional
+        Embedding vector dimension. Must match the model. Default is 384.
 
     Example:
     --------
-    embedding = get_text_embedding("Hello, world!", model)
+    dsa = DocuSenseAI()
+    dsa.create_collection("my_docs")
+    dsa.add_document("my_docs", "report.pdf")
+    response = dsa.query("my_docs", "What is the revenue?")
     """
-    embedding = model.encode(text)
-    return embedding.tolist()
 
-def create_collection(collection_name: str) -> None:
-    """
-    Creates a collection in Milvus if it does not already exist.
+    def __init__(
+        self,
+        vectorstore_path: str = DEFAULT_VECTORSTORE,
+        embedding_model: str = DEFAULT_EMBEDDING_MODEL,
+        dimension: int = DEFAULT_DIMENSION
+    ):
+        os.makedirs(os.path.dirname(vectorstore_path) or ".", exist_ok=True)
+        self.dimension = dimension
+        self.model = SentenceTransformer(embedding_model)
+        self.vdb_client = MilvusClient(vectorstore_path)
 
-    Parameters:
-    -----------
-    collection_name : str
-        The name of the collection to be created.
+    def _get_text_embedding(self, text: str) -> List[float]:
+        """Generates an embedding vector from the input text."""
+        return self.model.encode(text).tolist()
 
-    Returns:
-    --------
-    None
-    """
-    if not vdb_client.has_collection(collection_name=collection_name):
-        vdb_client.create_collection(
-            collection_name=collection_name, 
-            dimension=DIMENSION
+    def create_collection(self, collection_name: str) -> None:
+        """Creates a collection in Milvus if it does not already exist."""
+        if not self.vdb_client.has_collection(collection_name=collection_name):
+            self.vdb_client.create_collection(
+                collection_name=collection_name,
+                dimension=self.dimension
+            )
+
+    def add_document(self, collection_name: str, path: str) -> None:
+        """
+        Adds a document to the Milvus collection.
+
+        Parameters:
+        -----------
+        collection_name : str
+            The name of the collection to add the document to.
+        path : str
+            The path to the document file.
+        """
+        if not self.vdb_client.has_collection(collection_name=collection_name):
+            self.create_collection(collection_name)
+
+        description, text = generate_description(path)
+        vector = self._get_text_embedding(description)
+        idx = uuid.uuid4().int % (2**63)
+
+        metadata = {
+            "type": path.split('.')[-1],
+            "description": description,
+            "content": text,
+            "path": path
+        }
+
+        data = [{
+            "id": idx,
+            "vector": vector,
+            "metadata": metadata
+        }]
+
+        self.vdb_client.insert(
+            collection_name=collection_name,
+            data=data,
+            timeout=120
         )
 
-def add_document(collection_name: str, path: str) -> None:
-    """
-    Adds a document to the Milvus collection.
+    def delete_collection(self, collection_name: str) -> None:
+        """Deletes a collection from Milvus."""
+        if self.vdb_client.has_collection(collection_name=collection_name):
+            self.vdb_client.drop_collection(collection_name=collection_name)
 
-    Parameters:
-    -----------
-    collection_name : str
-        The name of the collection to add the document to.
-    path : str
-        The path to the document file.
-
-    Returns:
-    --------
-    None
-    """
-    if not vdb_client.has_collection(collection_name=collection_name):
-        create_collection(collection_name)
-    
-    description, text = generate_description(path)
-    vector = get_text_embedding(description, model)
-    idx = uuid.uuid4().int % (2**63)
-
-    metadata = {
-        "type": path.split('.')[-1],  # file type
-        "description": description,
-        "content": text,
-        "path": path
-    }
-
-    data = [{
-        "id": idx,  # document ID
-        "vector": vector,
-        "metadata": metadata
-    }]
-
-    vdb_client.insert(
-        collection_name=collection_name, 
-        data=data, 
-        timeout=120
-    )
-
-def delete_collection(collection_name: str) -> None:
-    """
-    Deletes a collection from Milvus.
-
-    Parameters:
-    -----------
-    collection_name : str
-        The name of the collection to delete.
-
-    Returns:
-    --------
-    None
-    """
-    if vdb_client.has_collection(collection_name=collection_name):
-        vdb_client.drop_collection(collection_name=collection_name)
-
-def retrieve_document(
-    collection_name: str,
-    text: str,
-    top_k: int = 3
-) -> List[Dict[str, Union[str, int]]]:
-    """
-    Retrieves documents from a Milvus collection based on a text query.
-
-    Parameters:
-    -----------
-    collection_name : str
-        The name of the collection to retrieve documents from.
-    text : str
-        The query text to search for in the documents.
-    top_k : int, optional
-        The number of top documents to retrieve. Default is 3.
-
-    Returns:
-    --------
-    List[Dict[str, Union[str, int]]]
-        A list of dictionaries containing the metadata of the retrieved documents.
-    """
-    if not vdb_client.has_collection(collection_name=collection_name):
-        raise ValueError(f"Collection '{collection_name}' does not exist. Create it and add documents first.")
-
-    vector = get_text_embedding(text, model)
-
-    results = vdb_client.search(
-        collection_name=collection_name, 
-        data=[vector],
-        output_fields=["metadata"],
-        limit=top_k
-    )
-
-    return results[0] if results else []
-
-def retrieve_information_from_document(
-    text: str,
-    collection_name: str,
-    top_k: int = 3,
-    verbose: bool = False
-) -> str:
-    """
-    Retrieves information from documents based on a text query.
-
-    Parameters:
-    -----------
-    text : str
-        The query text to search for in the documents.
-    collection_name : str
-        The name of the collection to retrieve documents from.
-    top_k : int, optional
-        The number of top documents to retrieve. Default is 3.
-    verbose : bool, optional
-        Whether to print the retrieved documents. Default is False.
-
-    Returns:
-    --------
-    str
-        The response from the LLM.
-    """
-    search_results = retrieve_document(
-        collection_name=collection_name,
-        text=text,
-        top_k=top_k
-    )
-    
-    document_texts = [
-        f"""
-        Description: {result['entity']['metadata']['description']}
-        Content: {result['entity']['metadata']['content']}
-        Path: {result['entity']['metadata']['path']}
+    def retrieve_document(
+        self,
+        collection_name: str,
+        text: str,
+        top_k: int = 3
+    ) -> List[Dict[str, Union[str, int]]]:
         """
-        for result in search_results
-    ]
-    
-    if verbose:
-        for result in search_results:
-            print(result)
+        Retrieves documents from a Milvus collection based on a text query.
 
-    # Build conversation content with relevant document snippets
-    conversation = [
-        {"role": "system", "content": "You are an AI that answers questions based on document content."},
-        {"role": "user", "content": text}
-    ]
-    conversation.extend([
-        {"role": "system", "content": f"Document {idx + 1}: {doc_text}"}
-        for idx, doc_text in enumerate(document_texts)
-    ])
+        Parameters:
+        -----------
+        collection_name : str
+            The name of the collection to retrieve documents from.
+        text : str
+            The query text to search for in the documents.
+        top_k : int, optional
+            The number of top documents to retrieve. Default is 3.
 
-    # Ask the LLM to choose the best matching document and answer the query
-    conversation.append({"role": "user", "content": retrieval_prompt})
+        Returns:
+        --------
+        List[Dict[str, Union[str, int]]]
+            A list of dictionaries containing the metadata of the retrieved documents.
+        """
+        if not self.vdb_client.has_collection(collection_name=collection_name):
+            raise ValueError(f"Collection '{collection_name}' does not exist. Create it and add documents first.")
 
-    response = run_api(conversation)
-    return response
+        vector = self._get_text_embedding(text)
 
-def query(
-    collection_name: str,
-    user_query: str,
-    top_k: int = 3,
-    verbose: bool = False
-) -> str:
-    """
-    Retrieves the relevant documents and returns the response from the LLM.
+        results = self.vdb_client.search(
+            collection_name=collection_name,
+            data=[vector],
+            output_fields=["metadata"],
+            limit=top_k
+        )
 
-    Parameters:
-    -----------
-    collection_name : str
-        Name of the collection to retrieve documents from.
-    user_query : str
-        The query string from the user.
-    top_k : int, optional
-        The number of top documents to retrieve, by default 3.
-    verbose : bool, optional
-        Whether to print the search results, by default False.
+        return results[0] if results else []
 
-    Returns:
-    --------
-    str
-        The response from the LLM.
-    """
-    retrieved_info = retrieve_information_from_document(
-        text=user_query,
-        collection_name=collection_name,
-        top_k=top_k,
-        verbose=verbose
-    )
-    
-    return retrieved_info
+    def query(
+        self,
+        collection_name: str,
+        user_query: str,
+        top_k: int = 3,
+        verbose: bool = False
+    ) -> str:
+        """
+        Retrieves the relevant documents and returns the response from the LLM.
+
+        Parameters:
+        -----------
+        collection_name : str
+            Name of the collection to retrieve documents from.
+        user_query : str
+            The query string from the user.
+        top_k : int, optional
+            The number of top documents to retrieve, by default 3.
+        verbose : bool, optional
+            Whether to log the search results, by default False.
+
+        Returns:
+        --------
+        str
+            The response from the LLM.
+        """
+        search_results = self.retrieve_document(
+            collection_name=collection_name,
+            text=user_query,
+            top_k=top_k
+        )
+
+        document_texts = [
+            f"""
+            Description: {result['entity']['metadata']['description']}
+            Content: {result['entity']['metadata']['content']}
+            Path: {result['entity']['metadata']['path']}
+            """
+            for result in search_results
+        ]
+
+        if verbose:
+            for result in search_results:
+                logger.info(result)
+
+        conversation = [
+            {"role": "system", "content": "You are an AI that answers questions based on document content."},
+            {"role": "user", "content": user_query}
+        ]
+        conversation.extend([
+            {"role": "system", "content": f"Document {idx + 1}: {doc_text}"}
+            for idx, doc_text in enumerate(document_texts)
+        ])
+        conversation.append({"role": "user", "content": retrieval_prompt})
+
+        response = run_api(conversation)
+        return response

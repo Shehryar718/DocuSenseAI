@@ -52,14 +52,16 @@ pip install -r requirements.txt
 ### Usage
 
 ```python
-from docusenseai import delete_collection, add_document, query
+from docusenseai import DocuSenseAI
+
+dsa = DocuSenseAI()
 
 # Add a document to the collection
-add_document(COLLECTION_NAME, DOCUMENT_PATH)
+dsa.add_document(COLLECTION_NAME, DOCUMENT_PATH)
 
 # Query the collection
-query(COLLECTION_NAME, USER_QUERY)
+dsa.query(COLLECTION_NAME, USER_QUERY)
 
 # Delete the collection
-delete_collection(COLLECTION_NAME)
+dsa.delete_collection(COLLECTION_NAME)
 ```

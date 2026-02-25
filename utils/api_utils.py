@@ -11,12 +11,23 @@ from utils.parser import (
     get_txt_data
 )
 
-# Load environment variables
 load_dotenv()
 
-# Initialize OpenAI client
-api_key: str = os.environ.get('OPENAI_API_KEY')
-client: OpenAI = OpenAI(api_key=api_key)
+_client: OpenAI = None
+
+
+def _get_client() -> OpenAI:
+    """Lazily initializes and returns the OpenAI client with retry support."""
+    global _client
+    if _client is None:
+        api_key = os.environ.get('OPENAI_API_KEY')
+        if not api_key:
+            raise EnvironmentError(
+                "OPENAI_API_KEY environment variable is not set. "
+                "Set it in your .env file or export it in your shell."
+            )
+        _client = OpenAI(api_key=api_key, max_retries=3)
+    return _client
 
 def generate_description(file_path: str, user_message: str = '') -> Tuple[str, str]:
     """
@@ -112,11 +123,14 @@ def run_api(messages: List[Dict[str, str]], max_tokens: int = 1500) -> str:
     response = run_api([{"role": "system", "content": "Describe the content of the document."}, {"role": "user", "content": "The document is about AI."}])
     """
     try:
+        client = _get_client()
         response = client.chat.completions.create(
             model='gpt-4o-mini',
             messages=messages,
             max_tokens=max_tokens,
         )
         return response.choices[0].message.content
+    except EnvironmentError:
+        raise
     except Exception as e:
         raise RuntimeError(f"API request failed: {str(e)}")
