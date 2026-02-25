@@ -71,6 +71,7 @@ def generate_description(file_path: str, user_message: str = '') -> Tuple[str, s
         chat_history.append({"role": "user", "content": file_content})
     elif file_path.lower().endswith(('.png', '.jpg', '.jpeg', '.gif')):
         extracted_text, image_data = get_image_data(file_path)
+        file_content = extracted_text
         text_data = {"type": "text", "text": extracted_text}
         chat_history.append({"role": "user", "content": [image_data, text_data]})
     else:

@@ -1,4 +1,5 @@
 import os
+import uuid
 from pymilvus import MilvusClient
 from sentence_transformers import SentenceTransformer
 from utils.api_utils import run_api, generate_description
@@ -78,7 +79,7 @@ def add_document(collection_name: str, path: str) -> None:
     
     description, text = generate_description(path)
     vector = get_text_embedding(description, model)
-    idx = vdb_client.get_collection_stats(collection_name=collection_name)['row_count']
+    idx = uuid.uuid4().int % (2**63)
 
     metadata = {
         "type": path.split('.')[-1],  # file type
@@ -138,7 +139,7 @@ def retrieve_document(
         A list of dictionaries containing the metadata of the retrieved documents.
     """
     if not vdb_client.has_collection(collection_name=collection_name):
-        create_collection(collection_name)
+        raise ValueError(f"Collection '{collection_name}' does not exist. Create it and add documents first.")
 
     vector = get_text_embedding(text, model)
 
