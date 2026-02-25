@@ -170,27 +170,28 @@ class DocuSenseAI:
         )
 
         document_texts = [
-            f"""
-            Description: {result['entity']['metadata']['description']}
-            Content: {result['entity']['metadata']['content']}
-            Path: {result['entity']['metadata']['path']}
-            """
-            for result in search_results
+            f"Document {idx + 1}:\n"
+            f"  Description: {result['entity']['metadata']['description']}\n"
+            f"  Content: {result['entity']['metadata']['content']}\n"
+            f"  Path: {result['entity']['metadata']['path']}"
+            for idx, result in enumerate(search_results)
         ]
 
         if verbose:
             for result in search_results:
                 logger.info(result)
 
+        documents_block = "\n\n".join(document_texts)
+        system_message = (
+            "You are an AI that answers questions based on document content.\n\n"
+            f"{retrieval_prompt.strip()}\n\n"
+            f"--- Retrieved Documents ---\n{documents_block}"
+        )
+
         conversation = [
-            {"role": "system", "content": "You are an AI that answers questions based on document content."},
+            {"role": "system", "content": system_message},
             {"role": "user", "content": user_query}
         ]
-        conversation.extend([
-            {"role": "system", "content": f"Document {idx + 1}: {doc_text}"}
-            for idx, doc_text in enumerate(document_texts)
-        ])
-        conversation.append({"role": "user", "content": retrieval_prompt})
 
         response = run_api(conversation)
         return response
